@@ -7,10 +7,11 @@ VL53L1X sensor;
 // Configuration parameters
 const int NUM_ZONES = 6;
 const int MIN_DISTANCE = 10;
-const int SAMPLES_FOR_BASELINE = 100;  // Número de muestras para calcular la distancia base
+const int SAMPLES_FOR_BASELINE = 50;  // Número de muestras para calcular la distancia base (reducido a la mitad)
 const unsigned long SETUP_DELAY = 5000;
-const unsigned long MEASUREMENT_PERIOD = 10000;  // Período de medición en milisegundos
+const unsigned long MEASUREMENT_PERIOD = 5000;  // Período de medición en milisegundos (reducido a la mitad)
 const int OBJECT_DETECTION_THRESHOLD = 20;  // Umbral para detectar un objeto (ajustado)
+const int HYSTERESIS = 5;  // Histéresis para evitar cambios de zona con fluctuaciones menores
 
 const int FILTER_SIZE = 5;  // Tamaño del filtro para suavizar lecturas
 int readings[FILTER_SIZE];  // Array para almacenar las lecturas
@@ -110,6 +111,7 @@ void loop() {
 
     int reading = sensor.read();
     if (sensor.timeoutOccurred()) {
+      Serial.println("¡Tiempo de espera del sensor durante la lectura!");
       return;
     }
 
@@ -120,8 +122,20 @@ void loop() {
     readIndex = (readIndex + 1) % FILTER_SIZE;
     average = total / FILTER_SIZE;
 
+    Serial.print("Lectura cruda: ");
+    Serial.print(reading);
+    Serial.print(" | Lectura filtrada: ");
+    Serial.println(average);
+
     // Calcular la diferencia respecto a la distancia base
     int distanceDifference = baselineDistance - average;
+
+    Serial.print("Distancia base: ");
+    Serial.println(baselineDistance);
+    Serial.print("Diferencia de distancia: ");
+    Serial.println(distanceDifference);
+    Serial.print("Umbral de detección: ");
+    Serial.println(OBJECT_DETECTION_THRESHOLD);
 
     // Verificar si el objeto está dentro del rango de detección con umbral
     if (distanceDifference > OBJECT_DETECTION_THRESHOLD && average > MIN_DISTANCE) {
@@ -129,12 +143,14 @@ void loop() {
       if (zone > NUM_ZONES) {
         zone = NUM_ZONES;
       }
+      Serial.print("Zona calculada: ");
+      Serial.println(zone);
       if (!objectPresent) {
         objectPresent = true;
         currentZone = zone;
         Serial.print("Objeto detectado en la Zona ");
         Serial.println(zone);
-      } else if (zone != currentZone) {
+      } else if (zone != currentZone && abs(zone - currentZone) > HYSTERESIS) {
         currentZone = zone;
         Serial.print("Cambio a Zona ");
         Serial.println(zone);
